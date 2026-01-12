@@ -78,7 +78,20 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Hero Section with Search */}
-      <div className="bg-emerald-900 text-white pt-16 pb-24 px-4 relative overflow-hidden">
+      <div className="bg-emerald-900 text-white pt-8 pb-24 px-4 relative overflow-hidden">
+        {/* Top Navigation */}
+        <div className="container mx-auto flex justify-end gap-4 mb-8 relative z-10">
+          <Link href="/about" className="text-emerald-200 hover:text-white transition text-sm font-medium">
+            About
+          </Link>
+          <Link href="/contact" className="text-emerald-200 hover:text-white transition text-sm font-medium">
+            Contact
+          </Link>
+          <Link href="/admin" className="text-emerald-200 hover:text-white transition text-sm font-medium">
+            Admin
+          </Link>
+        </div>
+
         {/* Decorative background blobs */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-800 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob"></div>
         <div className="absolute -bottom-8 left-20 w-72 h-72 bg-emerald-600 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob animation-delay-2000"></div>

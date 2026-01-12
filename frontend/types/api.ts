@@ -82,3 +82,74 @@ export interface ScrapeProgress {
     currentPage?: number;
     totalPages?: number;
 }
+
+// -----------------------------------------------------------------------------
+// Product Detail Types
+// -----------------------------------------------------------------------------
+
+/** A customer review */
+export interface Review {
+    author: string;
+    rating: number;
+    text: string;
+    date?: string;
+}
+
+/** Extended product with full details */
+export interface ProductDetail extends Product {
+    description?: string;
+    category?: {
+        title: string;
+        slug: string;
+    };
+    reviews?: Review[];
+    recommendations?: Product[];
+}
+
+// -----------------------------------------------------------------------------
+// Admin Dashboard Types
+// -----------------------------------------------------------------------------
+
+/** Cache statistics from Redis */
+export interface CacheStats {
+    connected: boolean;
+    keys?: number;
+    memory?: string;
+}
+
+/** A scrape job record */
+export interface ScrapeJob {
+    id: number;
+    target_url: string;
+    target_type: 'NAVIGATION' | 'CATEGORY' | 'PRODUCT';
+    status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+    items_found: number;
+    duration_ms?: number;
+    error_log?: string;
+    started_at: string;
+    finished_at?: string;
+}
+
+/** Response from GET /admin/jobs */
+export interface ScrapeJobsResponse {
+    jobs: ScrapeJob[];
+    stats: {
+        total: number;
+        pending?: number;
+        running?: number;
+        completed?: number;
+        failed?: number;
+    };
+}
+
+/** Response from GET /admin/overview */
+export interface AdminOverview {
+    counts: {
+        navigations: number;
+        categories: number;
+        products: number;
+        scrapeJobs: number;
+    };
+    cache: CacheStats;
+    recentJobs: ScrapeJob[];
+}

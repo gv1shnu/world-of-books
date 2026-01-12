@@ -21,6 +21,8 @@ import { CacheModule } from './cache/cache.module';
 import { CategoriesController } from './categories/categories.controller';
 import { HealthModule } from './health/health.module';
 import { BullModule } from '@nestjs/bull';
+import { ProductsModule } from './products/products.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -46,8 +48,14 @@ import { BullModule } from '@nestjs/bull';
 
     // Health Checks
     HealthModule,
+
+    // Product details API
+    ProductsModule,
+
+    // Admin dashboard API
+    AdminModule,
   ],
   controllers: [CategoriesController],
   providers: [],
 })
-export class AppModule {}
+export class AppModule { }
