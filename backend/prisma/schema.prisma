@@ -1,0 +1,134 @@
+// =============================================================================
+// World of Books - Database Schema
+// =============================================================================
+// This schema defines the data models for the book scraping platform.
+// It uses PostgreSQL with Prisma ORM for type-safe database access.
+//
+// Tables:
+//   - Navigation: Top-level menu categories (e.g., "Books", "DVDs")
+//   - Category: Sub-categories under navigations (e.g., "Fiction", "Sci-Fi")
+//   - Product: Individual book listings with price and metadata
+//   - ScrapeJob: Audit log for scraping operations
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// Enums - Type-safe constants for job tracking
+// -----------------------------------------------------------------------------
+
+/// Status of a background scraping job
+enum ScrapeJobStatus {
+  PENDING    // Job created, waiting to be picked up
+  RUNNING    // Job is currently being processed
+  COMPLETED  // Job finished successfully
+  FAILED     // Job encountered an error
+}
+
+/// Type of scraping target
+enum ScrapeTargetType {
+  NAVIGATION  // Scraping the main navigation menu
+  CATEGORY    // Scraping a category's product listings
+  PRODUCT     // Scraping individual product details
+}
+
+// -----------------------------------------------------------------------------
+// Navigation - Top-level menu structure
+// -----------------------------------------------------------------------------
+
+/// Represents a top-level navigation item (e.g., "Books", "DVDs", "Games")
+/// These are the main sections visible in the site's mega menu.
+model Navigation {
+  id         Int        @id @default(autoincrement())
+  title      String     // Display name (e.g., "Books")
+  slug       String     @unique // URL-friendly identifier
+  categories Category[] // Child categories under this navigation
+}
+
+// -----------------------------------------------------------------------------
+// Category - Book/Product categories
+// -----------------------------------------------------------------------------
+
+/// Sub-categories under a navigation (e.g., "Fiction" under "Books")
+/// Each category contains multiple products and tracks its scrape status.
+model Category {
+  id              Int        @id @default(autoincrement())
+  title           String     // Display name
+  slug            String     @unique // URL slug, used for routing
+  navigation      Navigation @relation(fields: [navigation_id], references: [id])
+  navigation_id   Int
+  products        Product[]  // Books in this category
+  last_scraped_at DateTime?  // When we last refreshed this category's products
+  product_count   Int        @default(0) // Cached count for display
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  // Indexes for common query patterns
+  @@index([navigation_id])    // Fast lookups by parent navigation
+  @@index([last_scraped_at])  // Finding stale categories to refresh
+}
+
+// -----------------------------------------------------------------------------
+// Product - Individual book listings
+// -----------------------------------------------------------------------------
+
+/// A book (or other product) scraped from World of Books.
+/// Contains pricing, availability, and metadata like ISBN.
+model Product {
+  id          Int      @id @default(autoincrement())
+  title       String   // Book title
+  author      String?  // Author name (optional, some items don't have authors)
+  price       Float    // Current selling price in GBP
+  image_url   String?  // Product image URL
+  source_url  String   // Original URL on World of Books
+  
+  // Upsert key - this is how we match existing products during re-scrapes
+  source_id   String   @unique // World of Books product ID
+  is_in_stock Boolean  @default(true) // Availability flag
+
+  description String?  // Full product description (from detail page)
+  specs       Json?    // Flexible storage for ISBN, condition, page count, etc.
+  
+  category    Category @relation(fields: [categoryId], references: [id])
+  categoryId  Int
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Performance indexes
+  @@index([categoryId])   // Fast category lookups
+  @@index([author])       // Search by author
+  @@index([price])        // Price filtering and sorting
+  @@index([updatedAt])    // "Recently updated" queries
+  @@index([is_in_stock])  // Filter by availability
+}
+
+// -----------------------------------------------------------------------------
+// ScrapeJob - Audit log for scraping operations
+// -----------------------------------------------------------------------------
+
+/// Tracks every scraping operation for monitoring and debugging.
+/// Helps identify slow scrapes, failures, and overall system health.
+model ScrapeJob {
+  id          Int              @id @default(autoincrement())
+  target_url  String           // URL that was scraped
+  target_type ScrapeTargetType // What kind of scrape (navigation, category, product)
+  status      ScrapeJobStatus  @default(PENDING) // Current job status
+  items_found Int              @default(0) // Number of items extracted
+  duration_ms Int?             // How long the scrape took
+  error_log   String?          // Error message if failed
+  started_at  DateTime         @default(now())
+  finished_at DateTime?
+
+  // Indexes for job monitoring queries
+  @@index([status])              // Find pending/failed jobs
+  @@index([target_type, status]) // Filter by type and status
+  @@index([started_at])          // Time-based queries
+}
