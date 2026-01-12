@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { CategoryData, ScrapeProgress } from '@/types/api';
 
 // -----------------------------------------------------------------------------
@@ -162,31 +163,45 @@ export default function CategoryPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
           {category.products.map((book) => (
             <div key={book.id} className="bg-white group rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all duration-300 flex flex-col animate-fade-in">
-              {/* Product Image */}
-              <div className="relative h-64 w-full bg-gray-100">
-                {book.image_url ? (
-                  <img
-                    src={book.image_url}
-                    alt={book.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-full text-gray-400">No Image</div>
-                )}
-                {/* Price Badge */}
-                <div className="absolute top-2 right-2 bg-white/90 backdrop-blur px-2 py-1 rounded text-xs font-bold shadow-sm">
-                  £{book.price}
+              {/* Clickable Product Area */}
+              <Link href={`/product/${book.id}`} className="flex flex-col flex-grow">
+                {/* Product Image */}
+                <div className="relative h-64 w-full bg-gray-100">
+                  {book.image_url ? (
+                    <img
+                      src={book.image_url}
+                      alt={book.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-400">No Image</div>
+                  )}
+                  {/* Price Badge */}
+                  <div className="absolute top-2 right-2 bg-white/90 backdrop-blur px-2 py-1 rounded text-xs font-bold shadow-sm">
+                    £{book.price}
+                  </div>
                 </div>
-              </div>
 
-              {/* Product Details */}
-              <div className="p-4 flex flex-col flex-grow">
-                <h3 className="font-bold text-gray-800 text-sm line-clamp-2 mb-1">{book.title}</h3>
-                <p className="text-xs text-gray-500 mb-3">{book.author}</p>
+                {/* Product Details */}
+                <div className="p-4 flex flex-col flex-grow">
+                  <h3 className="font-bold text-gray-800 text-sm line-clamp-2 mb-1">{book.title}</h3>
+                  <p className="text-xs text-gray-500 mb-3">{book.author}</p>
+                </div>
+              </Link>
+
+              {/* Action Buttons */}
+              <div className="px-4 pb-4 flex gap-2">
+                <Link
+                  href={`/product/${book.id}`}
+                  className="flex-1 text-center py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded hover:bg-gray-200 transition-colors"
+                >
+                  Details
+                </Link>
                 <a
                   href={book.source_url}
                   target="_blank"
-                  className="mt-auto block text-center w-full py-2 bg-emerald-50 text-emerald-700 text-sm font-semibold rounded hover:bg-emerald-600 hover:text-white transition-colors"
+                  rel="noopener noreferrer"
+                  className="flex-1 text-center py-2 bg-emerald-50 text-emerald-700 text-sm font-semibold rounded hover:bg-emerald-600 hover:text-white transition-colors"
                 >
                   Buy Now
                 </a>
