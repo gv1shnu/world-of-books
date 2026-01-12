@@ -761,17 +761,40 @@ export class ScraperService {
             const descEl = await page.$(selector);
             if (descEl) {
               description = (await descEl.textContent()) || '';
-              if (description.trim()) break;
+              // Validate it's actual description, not footer garbage
+              if (description.trim() &&
+                !description.includes('Country/region') &&
+                !description.includes('form_type') &&
+                !description.includes('localization-form') &&
+                description.length < 5000) {
+                break;
+              }
+              description = ''; // Reset if it was garbage
             }
           }
 
+          // Clean up the description text
+          if (description) {
+            description = description
+              .replace(/\s+/g, ' ')           // Normalize whitespace
+              .replace(/Facebook.*?Twitter/gi, '') // Remove social links
+              .trim()
+              .substring(0, 2000);            // Limit length
+          }
+
           const specs: Record<string, string> = {};
-          const specItems = await page.$$('li, tr');
-          for (const item of specItems) {
-            const text = await item.textContent();
-            if (text && text.includes(':')) {
-              const [key, value] = text.split(':').map((s) => s.trim());
-              if (key && value && key.length < 50) specs[key] = value;
+          // Only look for specs within product section, not entire page
+          const specContainer = await page.$('.product__description, .product-specifications');
+          if (specContainer) {
+            const specItems = await specContainer.$$('li, tr');
+            for (const item of specItems) {
+              const text = await item.textContent();
+              if (text && text.includes(':')) {
+                const [key, value] = text.split(':').map((s) => s.trim());
+                if (key && value && key.length < 50 && value.length < 200) {
+                  specs[key] = value;
+                }
+              }
             }
           }
 
