@@ -82,7 +82,7 @@ VERCEL_URL=""
 
 ### Frontend (frontend/.env.local)
 ```env
-NEXT_RAILWAY_URL="https://your-railway-backend.up.railway.app"
+NEXT_PUBLIC_API_URL="https://your-railway-backend.up.railway.app"
 ```
 
 ## API Endpoints
@@ -140,7 +140,7 @@ world-of-books/
 
 ### Frontend (Vercel)
 - Framework: Next.js
-- Set `NEXT_RAILWAY_URL` to Railway production URL
+- Set `NEXT_PUBLIC_API_URL` to Railway production URL
 
 ## Development Notes
 
