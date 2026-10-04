@@ -24,6 +24,10 @@ interface PaginationQuery {
 export class CategoriesController {
   private readonly logger = new Logger(CategoriesController.name);
 
+  // The in-flight initial navigation scrape, shared by concurrent requests so
+  // only one Chromium instance runs (matters on a 512 MB free-tier host).
+  private navigationScrape: Promise<void> | null = null;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly scraper: ScraperService,
@@ -68,7 +72,10 @@ export class CategoriesController {
       // Database empty? This is first run - trigger initial scrape
       if (navs.length === 0) {
         // Fire and forget - don't block the response
-        this.scraper
+        if (this.navigationScrape) {
+          return [{ id: 1, title: 'Loading Library...', categories: [] }];
+        }
+        this.navigationScrape = this.scraper
           .scrapeNavigation()
           .then(async (scrapedNavs) => {
             for (const nav of scrapedNavs) {
@@ -94,8 +101,11 @@ export class CategoriesController {
             // Clear cache so next request gets fresh data
             await this.cache.delete(cacheKey);
           })
-          .catch(() => {
-            // Silent fail
+          .catch((error) => {
+            this.logger.error('Initial navigation scrape failed', error);
+          })
+          .finally(() => {
+            this.navigationScrape = null;
           });
 
         // Return placeholder while scraping

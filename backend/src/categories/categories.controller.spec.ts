@@ -114,6 +114,25 @@ describe('CategoriesController', () => {
         { id: 1, title: 'Loading Library...', categories: [] },
       ]);
     });
+
+    it('should start only one navigation scrape for concurrent requests', async () => {
+      mockCache.get.mockResolvedValue(null);
+      mockPrisma.navigation.findMany.mockResolvedValue([]);
+      let finish: (value: never[]) => void = () => undefined;
+      mockScraper.scrapeNavigation.mockClear();
+      mockScraper.scrapeNavigation.mockReturnValue(
+        new Promise((resolve) => (finish = resolve)),
+      );
+
+      await controller.getNavigations();
+      await controller.getNavigations();
+      expect(mockScraper.scrapeNavigation).toHaveBeenCalledTimes(1);
+
+      finish([]);
+      await new Promise((resolve) => setImmediate(resolve));
+      await controller.getNavigations();
+      expect(mockScraper.scrapeNavigation).toHaveBeenCalledTimes(2);
+    });
   });
 
   // ---------------------------------------------------------------------------
