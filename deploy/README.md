@@ -37,9 +37,9 @@ GitHub Pages only serves static files, so the API runs on Render's own
 Free-tier behaviour to expect:
 - After 15 minutes without traffic the API sleeps; the next visit takes about a
   minute while it wakes. The frontend shows its loading spinner meanwhile.
-- `render.yaml` caps scraping at one Chromium page at a time to stay within
-  512 MB. If the logs show out-of-memory restarts, lower
-  `CRAWLEE_MEMORY_MBYTES`.
+- Scraping uses no browser: menus and book pages are plain HTML, and category
+  listings come from World of Books' public Algolia search index, so the API
+  stays around 100 MB.
 - Matched PDFs live in memory, so a "token expired" after the API sleeps just
   means clicking **Extract PDF** again.
 - Workspace bandwidth is 5 GB/month; each PDF opened counts against it.

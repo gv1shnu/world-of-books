@@ -24,11 +24,6 @@ services:
           property: connectionString
       - key: NODE_ENV
         value: production
-      # Keep Chromium + Node inside 512 MB
-      - key: SCRAPER_MAX_CONCURRENCY
-        value: "1"
-      - key: CRAWLEE_MEMORY_MBYTES
-        value: "350"
       - key: NODE_OPTIONS
         value: --max-old-space-size=192
 

@@ -221,11 +221,19 @@ describe('CategoriesController', () => {
 
       await controller.getCategory('science-fiction', {});
 
-      expect(mockQueue.add).toHaveBeenCalledWith('scrape-category', {
-        url: 'https://www.worldofbooks.com/en-gb/collections/science-fiction',
-        categoryId: 1,
-        slug: 'science-fiction',
-      });
+      expect(mockQueue.add).toHaveBeenCalledWith(
+        'scrape-category',
+        {
+          url: 'https://www.worldofbooks.com/en-gb/collections/science-fiction',
+          categoryId: 1,
+          slug: 'science-fiction',
+        },
+        {
+          jobId: 'scrape-category:science-fiction',
+          removeOnComplete: true,
+          removeOnFail: true,
+        },
+      );
       expect(mockCache.delete).toHaveBeenCalled();
     });
   });
