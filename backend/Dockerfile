@@ -1,4 +1,5 @@
-FROM mcr.microsoft.com/playwright:v1.57.0-jammy
+# Keep this tag equal to the "playwright" version in package.json
+FROM mcr.microsoft.com/playwright:v1.63.0-jammy
 
 # Set working directory
 WORKDIR /app
@@ -7,8 +8,8 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Install dependencies
-RUN npm install
+# Install the exact locked dependencies
+RUN npm ci
 
 # Generate Prisma Client
 RUN npx prisma generate
