@@ -8,7 +8,7 @@
  * configuration (base URL, headers, etc.)
  * 
  * Environment:
- *   NEXT_RAILWAY_URL - Backend API URL (Railway production URL)
+ *   NEXT_PUBLIC_API_URL - Backend API URL (https://world-of-books-api.onrender.com in production)
  */
 
 import axios from 'axios';

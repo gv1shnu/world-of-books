@@ -13,7 +13,7 @@ import CategoryPage from './page';
 
 // Mock next/navigation
 jest.mock('next/navigation', () => ({
-    useParams: () => ({ slug: 'science-fiction' }),
+    useSearchParams: () => new URLSearchParams('slug=science-fiction'),
 }));
 
 // Mock the API module
@@ -114,8 +114,8 @@ describe('CategoryPage', () => {
             expect(screen.getByText('Science Fiction')).toBeInTheDocument();
         });
 
-        expect(screen.getByText(/Live scraping in progress/i)).toBeInTheDocument();
-        expect(screen.getByText(/Scraping Page 1 of 5/i)).toBeInTheDocument();
+        expect(screen.getByText(/^Live scraping in progress$/i)).toBeInTheDocument();
+        expect(screen.getByText(/^Page 1 of 5$/i)).toBeInTheDocument();
     });
 
     it('should show error state when API fails', async () => {

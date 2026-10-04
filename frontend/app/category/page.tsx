@@ -1,15 +1,15 @@
 /**
- * Category Page - /category/[slug]
+ * Category Page - /category?slug=<slug>
  * 
  * Displays products in a category with live scraping progress.
  */
 
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { useParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { CategoryData, ScrapeProgress } from '@/types/api';
 
@@ -40,9 +40,17 @@ const getScrapeProgress = async (slug: string) => {
 // Component
 // -----------------------------------------------------------------------------
 
+// Query-string routing keeps the site exportable as static files (GitHub Pages).
 export default function CategoryPage() {
-  const params = useParams();
-  const slug = params.slug as string;
+  return (
+    <Suspense fallback={null}>
+      <CategoryContent />
+    </Suspense>
+  );
+}
+
+function CategoryContent() {
+  const slug = useSearchParams().get('slug') ?? '';
   const [maxPages, setMaxPages] = useState<number>(3); // Default 3 pages = ~120 products
   const [currentPage, setCurrentPage] = useState<number>(1);
 
@@ -50,6 +58,7 @@ export default function CategoryPage() {
   const { data: progress } = useQuery({
     queryKey: ['progress', slug],
     queryFn: () => getScrapeProgress(slug),
+    enabled: !!slug,
     refetchInterval: 1000,
   });
 
@@ -57,6 +66,7 @@ export default function CategoryPage() {
   const { data: category, isLoading, error } = useQuery({
     queryKey: ['category', slug, currentPage, maxPages],
     queryFn: () => getCategory(slug, currentPage, maxPages),
+    enabled: !!slug,
     refetchInterval: (query) => {
       const isScraping = progress?.active;
       const isEmpty = !query.state.data?.products?.length;
@@ -164,7 +174,7 @@ export default function CategoryPage() {
           {category.products.map((book) => (
             <div key={book.id} className="bg-white group rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all duration-300 flex flex-col animate-fade-in">
               {/* Clickable Product Area */}
-              <Link href={`/product/${book.id}`} className="flex flex-col flex-grow">
+              <Link href={`/product?id=${book.id}`} className="flex flex-col flex-grow">
                 {/* Product Image */}
                 <div className="relative h-64 w-full bg-gray-100">
                   {book.image_url ? (
@@ -192,7 +202,7 @@ export default function CategoryPage() {
               {/* Action Buttons */}
               <div className="px-4 pb-4 flex gap-2">
                 <Link
-                  href={`/product/${book.id}`}
+                  href={`/product?id=${book.id}`}
                   className="flex-1 text-center py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded hover:bg-gray-200 transition-colors"
                 >
                   Details

@@ -76,13 +76,14 @@ Frontend runs at: http://localhost:3000
 ### Backend (backend/.env)
 ```env
 DATABASE_URL="postgresql://postgres:password@localhost:5432/worldofbooks?schema=public"
-REDIS_URL="https://your-redis-url.railway.app:6379"
-VERCEL_URL=""
+REDIS_URL="redis://localhost:6379"
+FRONTEND_ORIGINS="http://localhost:3000"
 ```
 
 ### Frontend (frontend/.env.local)
 ```env
-NEXT_PUBLIC_API_URL="https://your-railway-backend.up.railway.app"
+NEXT_PUBLIC_API_URL="http://localhost:8080"
+NEXT_PUBLIC_BASE_PATH=""   # "/world-of-books" in production
 ```
 
 ## API Endpoints
@@ -134,13 +135,12 @@ world-of-books/
 
 ## Deployment
 
-### Backend (Railway)
-- Services: Node.js, PostgreSQL, Redis
-- Dockerfile included for Playwright browser installation
+Live at https://www.vishnugandarapu.in/world-of-books/
 
-### Frontend (Vercel)
-- Framework: Next.js
-- Set `NEXT_PUBLIC_API_URL` to Railway production URL
+- **Frontend:** static export published by GitHub Pages (`.github/workflows/pages.yml`)
+- **Backend:** Render free web service (Docker) + Render Key Value, with Postgres on Neon
+
+See [deploy/README.md](deploy/README.md) for the step-by-step guide.
 
 ## Development Notes
 
@@ -155,3 +155,16 @@ export const SCRAPER_CONFIG = {
   maxRetries: 3,              // Retry failed pages
 };
 ```
+
+## Read a matching PDF
+
+Book detail pages include **Extract PDF**: search Google by quoted title and
+author with `filetype:pdf`, check the real PDF page count against the listing,
+and open a matching result in a reader on the page. Configure the server-only
+`SERPAPI_API_KEY` to enable automatic search. The allowed page difference is 5%
+(with a minimum of 5 pages). A matching count does not confirm the edition.
+
+See [PDF extraction setup, API, limits and deployment notes](docs/PDF-EXTRACTION.md).
+This project began as an exercise in browsing live product data from navigation
+through categories to individual book details. The original assignment brief
+has been removed from the repository.
