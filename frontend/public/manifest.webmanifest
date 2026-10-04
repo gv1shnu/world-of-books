@@ -1,0 +1,16 @@
+{
+  "name": "World of Books Explorer",
+  "short_name": "WoB Explorer",
+  "description": "Browse second-hand books from World of Books by category, with live prices, stock and book details.",
+  "start_url": "/world-of-books/",
+  "scope": "/world-of-books/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#064e3b",
+  "icons": [
+    { "src": "/world-of-books/icon.svg", "type": "image/svg+xml", "sizes": "any" },
+    { "src": "/world-of-books/icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "/world-of-books/icon-512.png", "type": "image/png", "sizes": "512x512" },
+    { "src": "/world-of-books/icon-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ]
+}

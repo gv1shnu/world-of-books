@@ -184,9 +184,9 @@ describe('CategoriesController', () => {
       mockPrisma.category.findUnique.mockResolvedValue(null);
       mockPrisma.product.count.mockResolvedValue(0);
 
-      const result = await controller.getCategory('non-existent', {});
-
-      expect(result).toEqual({ message: 'Category not found.' });
+      await expect(controller.getCategory('non-existent', {})).rejects.toThrow(
+        'Category not found.',
+      );
     });
 
     it('should handle pagination params', async () => {
@@ -238,23 +238,6 @@ describe('CategoriesController', () => {
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // GET /categories/admin/cache-stats
-  // ---------------------------------------------------------------------------
-  describe('getCacheStats()', () => {
-    it('should return cache statistics', async () => {
-      const stats = { connected: true, keys: 42, memory: '1.5M' };
-      mockCache.getStats.mockResolvedValue(stats);
-
-      const result = await controller.getCacheStats();
-
-      expect(result).toEqual(stats);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // getSortOrder() helper
-  // ---------------------------------------------------------------------------
   describe('getSortOrder()', () => {
     it('should return price ascending order', () => {
       const result = (controller as any).getSortOrder('price_asc');

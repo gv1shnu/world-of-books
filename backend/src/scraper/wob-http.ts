@@ -41,6 +41,11 @@ export interface ProductDetailData {
   description: string;
   specs: Record<string, string>;
   image_url?: string;
+  title?: string;
+  author?: string;
+  price?: number; // Lowest in-stock offer, else lowest offer
+  is_in_stock?: boolean;
+  categorySlugs: string[]; // Breadcrumb collections, most specific last
 }
 
 export async function fetchHtml(url: string): Promise<string> {
@@ -161,6 +166,11 @@ export async function queryAlgolia(
 export function parseProductDetailHtml(html: string): ProductDetailData {
   let description = '';
   let image_url: string | undefined;
+  let title: string | undefined;
+  let author: string | undefined;
+  let price: number | undefined;
+  let is_in_stock: boolean | undefined;
+  const categorySlugs: string[] = [];
   const specs: Record<string, string> = {};
 
   for (const [, json] of html.matchAll(
@@ -172,7 +182,26 @@ export function parseProductDetailHtml(html: string): ProductDetailData {
     } catch {
       continue;
     }
+    if (data?.['@type'] === 'BreadcrumbList') {
+      for (const item of data.itemListElement ?? []) {
+        const slug = String(item?.item ?? '').match(/\/collections\/([^/?#]+)/)?.[1];
+        if (slug) categorySlugs.push(slug);
+      }
+      continue;
+    }
     if (data?.['@type'] !== 'Book' && data?.['@type'] !== 'Product') continue;
+
+    if (!title && typeof data.name === 'string') title = decodeHtml(data.name).trim();
+    if (!author && data.author?.name) author = String(data.author.name);
+    if (data['@type'] === 'Product' && Array.isArray(data.offers)) {
+      const offers = data.offers
+        .map((o: any) => ({ price: Number(o?.price), inStock: /InStock$/.test(String(o?.availability)) }))
+        .filter((o: { price: number }) => Number.isFinite(o.price) && o.price > 0);
+      const inStock = offers.filter((o: { inStock: boolean }) => o.inStock);
+      const pool = inStock.length ? inStock : offers;
+      if (pool.length) price = Math.min(...pool.map((o: { price: number }) => o.price));
+      is_in_stock = inStock.length > 0;
+    }
 
     if (!description && typeof data.description === 'string') {
       description = stripTags(data.description);
@@ -208,5 +237,5 @@ export function parseProductDetailHtml(html: string): ProductDetailData {
     }
   }
 
-  return { description, specs, image_url };
+  return { description, specs, image_url, title, author, price, is_in_stock, categorySlugs };
 }

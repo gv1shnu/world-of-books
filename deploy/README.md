@@ -57,6 +57,23 @@ Book and category pages use query strings (`/product/?id=…`,
 `/category/?slug=…`) so every page is a static file and deep links survive a
 refresh.
 
+### Keeping the API awake (optional)
+
+`.github/workflows/keep-api-awake.yml` pings the API every 10 minutes using the
+same `NEXT_PUBLIC_API_URL` variable, so visitors rarely hit the one-minute
+cold start. One always-on service fits in Render's 750 free hours a month.
+Disable the workflow in the Actions tab if you'd rather let it sleep.
+
+### robots.txt
+
+Search engines only read `robots.txt` from the domain root, so it lives in the
+`gv1shnu.github.io` repository, not here. Add this line to it so crawlers find
+this project's sitemap:
+
+```
+Sitemap: https://www.vishnugandarapu.in/world-of-books/sitemap.xml
+```
+
 ## 4. Verify
 
 - `https://www.vishnugandarapu.in/world-of-books/` loads with styles.

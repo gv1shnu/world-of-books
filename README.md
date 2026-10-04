@@ -94,7 +94,11 @@ NEXT_PUBLIC_BASE_PATH=""   # "/world-of-books" in production
 | GET | `/categories/:slug` | Get category with products (paginated) |
 | GET | `/categories/:slug?page=2&limit=24` | Pagination support |
 | GET | `/categories/:slug?sort=price_asc` | Sort: price_asc, price_desc, newest, title |
-| GET | `/categories/admin/cache-stats` | Redis cache statistics |
+| GET | `/categories/:slug/progress` | Live scrape progress for a category |
+| GET | `/products/by-handle/:handle` | Book by its World of Books handle (stable link; rebuilt from the source page if missing) |
+| GET | `/products/:id` | Book by database id (older links) |
+
+Unknown category slugs return 404; the site then corrects clear typos or suggests the closest categories.
 
 ## Project Structure
 
@@ -111,15 +115,23 @@ world-of-books/
 │   │   ├── categories/         # REST API endpoints
 │   │   ├── cache/              # Redis caching layer
 │   │   ├── prisma/             # Database client
-│   │   └── scraper/            # Playwright scraper + queue worker
+│   │   ├── products/           # Book detail API
+│   │   ├── pdf/                # Extract PDF feature
+│   │   └── scraper/            # HTTP/Algolia scraper + queue worker
 │   └── Dockerfile              # Production deployment config
 │
 └── frontend/                   # Next.js Client
     ├── app/
-    │   ├── page.tsx            # Home page (category browser)
-    │   └── category/[slug]/    # Category detail page
+    │   ├── page.tsx            # Home page (menu pre-rendered at build time)
+    │   ├── HomeClient.tsx      # Category browser with "Did you mean"
+    │   ├── category/           # Category page (?slug=)
+    │   ├── product/            # Book page (?book=<handle>)
+    │   ├── about/              # About page
+    │   └── sitemap.ts          # sitemap.xml
+    ├── components/             # Footer, breadcrumbs, PDF reader
     └── lib/
-        └── api.ts              # Axios client config
+        ├── api.ts              # Axios client config
+        └── suggest.ts          # Typo-tolerant category matching
 ```
 
 ## Key Files

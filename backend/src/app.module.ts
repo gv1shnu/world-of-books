@@ -23,7 +23,6 @@ import { HealthModule } from './health/health.module';
 import { BullModule } from '@nestjs/bull';
 import { ProductsModule } from './products/products.module';
 import { PdfModule } from './pdf/pdf.module';
-import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -54,8 +53,6 @@ import { AdminModule } from './admin/admin.module';
     ProductsModule,
     PdfModule,
 
-    // Admin dashboard API
-    AdminModule,
   ],
   controllers: [CategoriesController],
   providers: [],

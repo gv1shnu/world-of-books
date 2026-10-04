@@ -33,6 +33,13 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm test
+      # The free API sleeps when idle; wake it so the build can pre-render the menu.
+      - name: Wake the API
+        if: ${{ vars.NEXT_PUBLIC_API_URL != '' }}
+        run: >-
+          curl -sS -o /dev/null -w "API answered %{http_code}\n"
+          --retry 5 --retry-delay 10 --retry-all-errors --max-time 90
+          "${{ vars.NEXT_PUBLIC_API_URL }}/categories/navigations" || true
       - run: npm run build
         env:
           NEXT_PUBLIC_BASE_PATH: /world-of-books
