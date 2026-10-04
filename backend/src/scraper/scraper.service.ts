@@ -790,7 +790,9 @@ export class ScraperService {
             for (const item of specItems) {
               const text = await item.textContent();
               if (text && text.includes(':')) {
-                const [key, value] = text.split(':').map((s) => s.trim());
+                const separator = text.indexOf(':');
+                const key = text.slice(0, separator).trim();
+                const value = text.slice(separator + 1).trim();
                 if (key && value && key.length < 50 && value.length < 200) {
                   specs[key] = value;
                 }

@@ -155,3 +155,16 @@ export const SCRAPER_CONFIG = {
   maxRetries: 3,              // Retry failed pages
 };
 ```
+
+## Read a matching PDF
+
+Book detail pages include **Extract PDF**: search Google by quoted title and
+author with `filetype:pdf`, check the real PDF page count against the listing,
+and open a matching result in a reader on the page. Configure the server-only
+`SERPAPI_API_KEY` to enable automatic search. The allowed page difference is 5%
+(with a minimum of 5 pages). A matching count does not confirm the edition.
+
+See [PDF extraction setup, API, limits and deployment notes](docs/PDF-EXTRACTION.md).
+This project began as an exercise in browsing live product data from navigation
+through categories to individual book details. The original assignment brief
+has been removed from the repository.

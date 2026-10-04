@@ -11,6 +11,7 @@ import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import Link from 'next/link';
+import PdfReader from '@/components/PdfReader';
 import { ProductDetail, Review } from '@/types/api';
 
 // -----------------------------------------------------------------------------
@@ -208,6 +209,8 @@ export default function ProductPage() {
                                     <p className="text-gray-600 leading-relaxed">{product.description}</p>
                                 </div>
                             )}
+
+                            <PdfReader key={product.id} productId={product.id} title={product.title} />
 
                             {/* Specs */}
                             {product.specs && Object.keys(product.specs).length > 0 && (
