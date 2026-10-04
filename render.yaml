@@ -6,6 +6,7 @@ services:
     name: world-of-books-api
     runtime: docker
     plan: free
+    region: singapore # same region as the Neon database (ap-southeast-1)
     rootDir: backend
     dockerfilePath: ./Dockerfile
     autoDeploy: true
@@ -34,5 +35,6 @@ services:
   - type: keyvalue
     name: world-of-books-redis
     plan: free
+    region: singapore
     maxmemoryPolicy: volatile-lru # evict only TTL cache keys, never Bull job keys
     ipAllowList: [] # only reachable from Render services in this account
