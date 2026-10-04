@@ -12,8 +12,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CategoryPage from './page';
 
 // Mock next/navigation
+let mockSearch = 'slug=science-fiction';
+const mockReplace = jest.fn();
 jest.mock('next/navigation', () => ({
-    useSearchParams: () => new URLSearchParams('slug=science-fiction'),
+    useSearchParams: () => new URLSearchParams(mockSearch),
+    useRouter: () => ({ replace: mockReplace, push: jest.fn() }),
 }));
 
 // Mock the API module
@@ -64,6 +67,7 @@ describe('CategoryPage', () => {
                     price: 9.99,
                     image_url: 'https://example.com/dune.jpg',
                     source_url: 'https://worldofbooks.com/dune',
+                    source_id: 'dune-book-frank-herbert',
                 },
                 {
                     id: 2,
@@ -80,9 +84,7 @@ describe('CategoryPage', () => {
 
         render(<CategoryPage />, { wrapper: createWrapper() });
 
-        await waitFor(() => {
-            expect(screen.getByText('Science Fiction')).toBeInTheDocument();
-        });
+        expect(await screen.findByRole('heading', { level: 1, name: 'Science Fiction' })).toBeInTheDocument();
 
         expect(screen.getByText('Dune')).toBeInTheDocument();
         expect(screen.getByText('Frank Herbert')).toBeInTheDocument();
@@ -110,11 +112,9 @@ describe('CategoryPage', () => {
 
         render(<CategoryPage />, { wrapper: createWrapper() });
 
-        await waitFor(() => {
-            expect(screen.getByText('Science Fiction')).toBeInTheDocument();
-        });
+        expect(await screen.findByRole('heading', { level: 1, name: 'Science Fiction' })).toBeInTheDocument();
 
-        expect(screen.getByText(/^Live scraping in progress$/i)).toBeInTheDocument();
+        expect(await screen.findByText(/^Live scraping in progress$/i)).toBeInTheDocument();
         expect(screen.getByText(/^Page 1 of 5$/i)).toBeInTheDocument();
     });
 
@@ -123,9 +123,10 @@ describe('CategoryPage', () => {
 
         render(<CategoryPage />, { wrapper: createWrapper() });
 
-        await waitFor(() => {
-            expect(screen.getByText(/Could not load category/i)).toBeInTheDocument();
-        });
+        // The page retries once before giving up.
+        expect(
+            await screen.findByText(/Could not load this category/i, undefined, { timeout: 5000 }),
+        ).toBeInTheDocument();
     });
 
     it('should render product cards with buy links', async () => {
@@ -140,6 +141,7 @@ describe('CategoryPage', () => {
                     price: 9.99,
                     image_url: 'https://example.com/dune.jpg',
                     source_url: 'https://worldofbooks.com/dune',
+                    source_id: 'dune-book-frank-herbert',
                 },
             ],
         };
@@ -149,7 +151,7 @@ describe('CategoryPage', () => {
         render(<CategoryPage />, { wrapper: createWrapper() });
 
         await waitFor(() => {
-            const buyLinks = screen.getAllByRole('link', { name: /Buy Now/i });
+            const buyLinks = screen.getAllByRole('link', { name: /Buy Dune/i });
             expect(buyLinks[0]).toHaveAttribute('href', 'https://worldofbooks.com/dune');
             expect(buyLinks[0]).toHaveAttribute('target', '_blank');
         });
@@ -167,6 +169,7 @@ describe('CategoryPage', () => {
                     price: 9.99,
                     image_url: 'https://example.com/dune.jpg',
                     source_url: 'https://worldofbooks.com/dune',
+                    source_id: 'dune-book-frank-herbert',
                 },
             ],
         };
@@ -177,6 +180,76 @@ describe('CategoryPage', () => {
 
         await waitFor(() => {
             expect(screen.getByText('£9.99')).toBeInTheDocument();
+        });
+    });
+
+    it('should link books by their stable handle', async () => {
+        (api.get as jest.Mock).mockResolvedValue({
+            data: {
+                id: 1,
+                title: 'Science Fiction',
+                products: [
+                    { id: 1, title: 'Dune', price: 9.99, source_url: 'https://worldofbooks.com/dune', source_id: 'dune-book-frank-herbert' },
+                ],
+            },
+        });
+
+        render(<CategoryPage />, { wrapper: createWrapper() });
+
+        const details = await screen.findByRole('link', { name: 'Details: Dune' });
+        expect(details).toHaveAttribute('href', '/product?book=dune-book-frank-herbert');
+    });
+
+    describe('unknown category', () => {
+        const notFound = Object.assign(new Error('Not Found'), {
+            isAxiosError: true,
+            response: { status: 404 },
+        });
+        const navigations = [
+            {
+                id: 1,
+                title: 'Fiction',
+                categories: [
+                    { id: 1, title: 'Crime & Mystery', slug: 'crime-and-mystery-books' },
+                    { id: 2, title: 'Horror', slug: 'horror-books' },
+                    { id: 3, title: 'History', slug: 'history-books' },
+                ],
+            },
+        ];
+        const mockApi = () =>
+            (api.get as jest.Mock).mockImplementation((url: string) =>
+                url === '/categories/navigations'
+                    ? Promise.resolve({ data: navigations })
+                    : Promise.reject(notFound),
+            );
+
+        afterEach(() => {
+            mockSearch = 'slug=science-fiction';
+        });
+
+        it('jumps straight to the intended category for a clear typo', async () => {
+            mockSearch = 'slug=crime-and-mystrey-books';
+            mockApi();
+
+            render(<CategoryPage />, { wrapper: createWrapper() });
+
+            await waitFor(() =>
+                expect(mockReplace).toHaveBeenCalledWith(
+                    '/category?slug=crime-and-mystery-books&from=crime-and-mystrey-books',
+                ),
+            );
+        });
+
+        it('offers "Did you mean" links when the intended category is unclear', async () => {
+            mockSearch = 'slug=hor';
+            mockApi();
+
+            render(<CategoryPage />, { wrapper: createWrapper() });
+
+            expect(await screen.findByRole('heading', { name: 'Category not found' })).toBeInTheDocument();
+            expect(screen.getByText('Did you mean:')).toBeInTheDocument();
+            expect(screen.getByRole('link', { name: 'Horror' })).toHaveAttribute('href', '/category?slug=horror-books');
+            expect(mockReplace).not.toHaveBeenCalled();
         });
     });
 });

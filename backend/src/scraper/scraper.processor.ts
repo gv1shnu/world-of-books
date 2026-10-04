@@ -51,11 +51,12 @@ export class ScraperProcessor {
             for (const product of products) {
               await tx.product.upsert({
                 where: { source_id: product.source_id },
+                // Listing data only refreshes price and stock: specs scraped
+                // from the product page (page count, ISBN...) must survive.
                 update: {
                   price: product.price,
                   is_in_stock: true,
                   updatedAt: new Date(),
-                  ...(product.isbn && { specs: { isbn: product.isbn } }),
                 },
                 create: {
                   title: product.title,

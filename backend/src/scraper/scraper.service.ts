@@ -26,6 +26,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SCRAPER_CONFIG, sleep, withRetry } from './scraper.config';
 import {
   AlgoliaSettings,
+  ProductDetailData,
   WOB_BASE_URL,
   decodeHtml,
   fetchHtml,
@@ -117,6 +118,9 @@ export interface ScrapedProductDetail {
   reviews: ScrapedReview[];
   recommendations: ScrapedProduct[];
 }
+
+/** Everything a product page offers, for rebuilding a missing product */
+export type ProductPageData = ProductDetailData & { source_url: string };
 
 /** Result wrapper with pagination info and error tracking */
 export interface ScrapeResult<T> {
@@ -358,12 +362,23 @@ export class ScraperService {
   async scrapeProductDetail(url: string): Promise<ScrapedProductDetail> {
     return this.trackJob(ScrapeTargetType.PRODUCT, url, async () => {
       const html = await withRetry(() => fetchHtml(url));
-      const detail = parseProductDetailHtml(html);
+      const { description, specs, image_url } = parseProductDetailHtml(html);
       return {
-        ...detail,
+        description,
+        specs,
+        image_url,
         reviews: [],
         recommendations: [],
       };
+    });
+  }
+
+  // 3b. PRODUCT BY HANDLE - full record for a product page we have not stored
+  async scrapeProductByHandle(handle: string): Promise<ProductPageData> {
+    const url = `${WOB_BASE_URL}/en-gb/products/${handle}`;
+    return this.trackJob(ScrapeTargetType.PRODUCT, url, async () => {
+      const html = await withRetry(() => fetchHtml(url));
+      return { ...parseProductDetailHtml(html), source_url: url };
     });
   }
 

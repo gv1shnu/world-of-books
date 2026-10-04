@@ -106,54 +106,6 @@ export interface ProductDetail extends Product {
     recommendations?: Product[];
 }
 
-// -----------------------------------------------------------------------------
-// Admin Dashboard Types
-// -----------------------------------------------------------------------------
-
-/** Cache statistics from Redis */
-export interface CacheStats {
-    connected: boolean;
-    keys?: number;
-    memory?: string;
-}
-
-/** A scrape job record */
-export interface ScrapeJob {
-    id: number;
-    target_url: string;
-    target_type: 'NAVIGATION' | 'CATEGORY' | 'PRODUCT';
-    status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
-    items_found: number;
-    duration_ms?: number;
-    error_log?: string;
-    started_at: string;
-    finished_at?: string;
-}
-
-/** Response from GET /admin/jobs */
-export interface ScrapeJobsResponse {
-    jobs: ScrapeJob[];
-    stats: {
-        total: number;
-        pending?: number;
-        running?: number;
-        completed?: number;
-        failed?: number;
-    };
-}
-
-/** Response from GET /admin/overview */
-export interface AdminOverview {
-    counts: {
-        navigations: number;
-        categories: number;
-        products: number;
-        scrapeJobs: number;
-    };
-    cache: CacheStats;
-    recentJobs: ScrapeJob[];
-}
-
 /** Outcome of a title/author PDF search and actual page-count check. */
 export interface PdfExtraction {
     status: 'matched' | 'no_match' | 'missing_metadata' | 'not_configured';

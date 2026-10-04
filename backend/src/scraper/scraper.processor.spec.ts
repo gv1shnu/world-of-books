@@ -95,5 +95,33 @@ describe('ScraperProcessor', () => {
       // Verify progress cleared at end
       expect(cacheService.clearScrapeProgress).toHaveBeenCalledWith('test-cat');
     });
+
+    it('should refresh price and stock without overwriting stored specs', async () => {
+      const upsert = jest.fn();
+      prismaService.$transaction.mockImplementation((cb: any) =>
+        cb({
+          product: { upsert, count: jest.fn().mockResolvedValue(1) },
+          category: { update: jest.fn() },
+        }),
+      );
+      (scraperService.scrapeCategoryAllPages as jest.Mock).mockImplementation(
+        async (_url, onBatch) => {
+          await onBatch(
+            [{ title: 'Dune', source_id: 'dune', price: 4, isbn: '9780340960196', source_url: 'u' }],
+            { current: 1, total: 1 },
+          );
+          return { data: [], pagesScraped: 1, totalItems: 1, errors: [] };
+        },
+      );
+
+      await processor.handleScrapeCategory({
+        data: { url: 'http://test.com', categoryId: 1, slug: 'sci-fi' },
+      } as Job);
+
+      const args = upsert.mock.calls[0][0];
+      expect(args.update).not.toHaveProperty('specs');
+      expect(args.update).toEqual(expect.objectContaining({ price: 4, is_in_stock: true }));
+      expect(args.create.specs).toEqual({ isbn: '9780340960196' });
+    });
   });
 });

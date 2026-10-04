@@ -1,5 +1,8 @@
 /**
- * Product Detail Page - /product?id=<id>
+ * Product Detail Page - /product?book=<World of Books handle>
+ *
+ * The handle is stable across database resets; old /product?id=<id> links
+ * still work and are rewritten to the handle form.
  * 
  * Shows full product information including description, specs, reviews,
  * and recommended products. Triggers on-demand scraping if details are missing.
@@ -7,20 +10,26 @@
 
 'use client';
 
-import { Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import Link from 'next/link';
 import PdfReader from '@/components/PdfReader';
 import { ProductDetail, Review } from '@/types/api';
+import Breadcrumbs from '@/components/Breadcrumbs';
+import { SITE_NAME, jsonLdScript, siteUrl } from '@/lib/site';
+import { useCanonical } from '@/lib/useCanonical';
 
 // -----------------------------------------------------------------------------
 // API Calls
 // -----------------------------------------------------------------------------
 
-const getProduct = async (id: string) => {
-    const { data } = await api.get<ProductDetail>(`/products/${id}`);
+const getProduct = async (ref: { book?: string; id?: string }) => {
+    const path = ref.book
+        ? `/products/by-handle/${encodeURIComponent(ref.book)}`
+        : `/products/${encodeURIComponent(ref.id ?? '')}`;
+    const { data } = await api.get<ProductDetail>(path);
     return data;
 };
 
@@ -51,12 +60,12 @@ function ReviewCard({ review }: { review: Review }) {
     return (
         <div className="bg-gray-50 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
-                <span className="font-medium text-gray-800">{review.author}</span>
+                <span className="font-medium text-gray-900">{review.author}</span>
                 <StarRating rating={review.rating} />
             </div>
-            <p className="text-gray-600 text-sm">{review.text}</p>
+            <p className="text-gray-700 text-sm">{review.text}</p>
             {review.date && (
-                <p className="text-gray-400 text-xs mt-2">{review.date}</p>
+                <p className="text-gray-600 text-xs mt-2">{review.date}</p>
             )}
         </div>
     );
@@ -70,17 +79,40 @@ function SpecsTable({ specs }: { specs: Record<string, unknown> }) {
 
     return (
         <div className="bg-gray-50 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-gray-800 mb-3">Specifications</h3>
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">Specifications</h2>
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {entries.map(([key, value]) => (
                     <div key={key} className="flex">
-                        <dt className="text-gray-500 font-medium min-w-[120px]">{key}:</dt>
+                        <dt className="text-gray-700 font-medium min-w-[120px]">{key}:</dt>
                         <dd className="text-gray-800">{String(value)}</dd>
                     </div>
                 ))}
             </dl>
         </div>
     );
+}
+
+/** schema.org Book data for search engines and agents. */
+function bookJsonLd(product: ProductDetail) {
+    const specs = (product.specs ?? {}) as Record<string, unknown>;
+    const pages = Number(String(specs['Number of pages'] ?? '').replace(/\D/g, ''));
+    return {
+        '@context': 'https://schema.org',
+        '@type': 'Book',
+        name: product.title,
+        ...(product.author ? { author: { '@type': 'Person', name: product.author } } : {}),
+        ...(product.image_url ? { image: product.image_url } : {}),
+        ...(specs['ISBN 13'] ? { isbn: String(specs['ISBN 13']) } : {}),
+        ...(pages ? { numberOfPages: pages } : {}),
+        url: siteUrl(`product/?book=${encodeURIComponent(product.source_id)}`),
+        offers: {
+            '@type': 'Offer',
+            price: product.price.toFixed(2),
+            priceCurrency: 'GBP',
+            availability: product.is_in_stock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+            url: product.source_url,
+        },
+    };
 }
 
 // -----------------------------------------------------------------------------
@@ -97,23 +129,40 @@ export default function ProductPage() {
 }
 
 function ProductContent() {
-    const id = useSearchParams().get('id') ?? '';
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const book = searchParams.get('book') ?? '';
+    const id = searchParams.get('id') ?? '';
 
     const { data: product, isLoading, error } = useQuery({
-        queryKey: ['product', id],
-        queryFn: () => getProduct(id),
-        enabled: !!id,
+        queryKey: ['product', book || `id:${id}`],
+        queryFn: () => getProduct({ book: book || undefined, id: id || undefined }),
+        enabled: !!(book || id),
         staleTime: 1000 * 60 * 3, // 3 minutes
     });
+
+    // Old numeric links: switch the address bar to the stable handle form.
+    useEffect(() => {
+        if (!book && product?.source_id) {
+            router.replace(`/product?book=${encodeURIComponent(product.source_id)}`);
+        }
+    }, [book, product?.source_id, router]);
+
+    useEffect(() => {
+        if (!product?.title) return;
+        document.title = `${product.title}${product.author ? ` by ${product.author}` : ''} | ${SITE_NAME}`;
+    }, [product?.title, product?.author]);
+
+    useCanonical(product?.source_id ? siteUrl(`product/?book=${encodeURIComponent(product.source_id)}`) : null);
 
     // Loading state
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center" role="status">
                 <div className="text-center">
-                    <div className="w-16 h-16 border-4 border-emerald-100 border-t-emerald-600 rounded-full animate-spin mx-auto mb-4" />
-                    <p className="text-emerald-800 font-medium animate-pulse">Loading product details...</p>
-                    <p className="text-gray-500 text-sm mt-2">Scraping live data if needed...</p>
+                    <div className="w-16 h-16 border-4 border-emerald-100 border-t-emerald-700 rounded-full animate-spin mx-auto mb-4" aria-hidden="true" />
+                    <p className="text-emerald-900 font-medium">Loading book details...</p>
+                    <p className="text-gray-700 text-sm mt-2">Fetching live data if needed...</p>
                 </div>
             </div>
         );
@@ -122,14 +171,14 @@ function ProductContent() {
     // Error state
     if (error || !product) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="min-h-[60vh] bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="text-6xl mb-4">📚</div>
-                    <h1 className="text-2xl font-bold text-gray-800 mb-2">Product Not Found</h1>
-                    <p className="text-gray-500 mb-6">The book you&apos;re looking for doesn&apos;t exist.</p>
+                    <div className="text-6xl mb-4" aria-hidden="true">📚</div>
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Book not found</h1>
+                    <p className="text-gray-700 mb-6">The book you&apos;re looking for doesn&apos;t exist.</p>
                     <Link
                         href="/"
-                        className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
+                        className="inline-flex items-center px-4 py-2 bg-emerald-700 text-white rounded-lg hover:bg-emerald-800 transition"
                     >
                         ← Back to Home
                     </Link>
@@ -139,18 +188,27 @@ function ProductContent() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="bg-gray-50">
             {/* Header */}
-            <div className="bg-emerald-900 text-white py-6 px-4">
+            <header className="bg-emerald-900 text-white py-6 px-4">
                 <div className="container mx-auto">
-                    <Link
-                        href={product.category ? `/category?slug=${encodeURIComponent(product.category.slug)}` : '/'}
-                        className="text-emerald-300 hover:text-white transition inline-flex items-center gap-2 mb-4"
-                    >
-                        ← Back to {product.category?.title || 'Categories'}
-                    </Link>
+                    <Breadcrumbs
+                        light
+                        items={[
+                            { label: 'Home', href: '/' },
+                            ...(product.category
+                                ? [{ label: product.category.title, href: `/category?slug=${encodeURIComponent(product.category.slug)}` }]
+                                : []),
+                            { label: product.title },
+                        ]}
+                    />
                 </div>
-            </div>
+            </header>
+
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={jsonLdScript(bookJsonLd(product))}
+            />
 
             {/* Main Content */}
             <div className="container mx-auto px-4 py-8">
@@ -163,7 +221,10 @@ function ProductContent() {
                                 {product.image_url ? (
                                     <img
                                         src={product.image_url}
-                                        alt={product.title}
+                                        alt={`Cover of ${product.title}`}
+                                        width={480}
+                                        height={640}
+                                        fetchPriority="high"
                                         className="w-full h-full object-cover"
                                     />
                                 ) : (
@@ -180,9 +241,10 @@ function ProductContent() {
                                 href={product.source_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="w-full mt-4 inline-flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-semibold"
+                                className="w-full mt-4 inline-flex items-center justify-center gap-2 px-6 py-3 bg-emerald-700 text-white rounded-lg hover:bg-emerald-800 transition font-semibold"
                             >
                                 View on World of Books
+                                <span className="sr-only"> (opens in a new tab)</span>
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                                 </svg>
@@ -195,18 +257,18 @@ function ProductContent() {
                             <div>
                                 <h1 className="text-3xl font-bold text-gray-900 mb-2">{product.title}</h1>
                                 {product.author && (
-                                    <p className="text-xl text-gray-600">by {product.author}</p>
+                                    <p className="text-xl text-gray-700">by {product.author}</p>
                                 )}
                             </div>
 
                             {/* Price & Availability */}
                             <div className="flex items-center gap-4">
-                                <span className="text-3xl font-bold text-emerald-600">
+                                <span className="text-3xl font-bold text-emerald-800">
                                     £{product.price.toFixed(2)}
                                 </span>
                                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${product.is_in_stock
-                                        ? 'bg-green-100 text-green-800'
-                                        : 'bg-red-100 text-red-800'
+                                        ? 'bg-green-100 text-green-900'
+                                        : 'bg-red-100 text-red-900'
                                     }`}>
                                     {product.is_in_stock ? 'In Stock' : 'Out of Stock'}
                                 </span>
@@ -215,8 +277,8 @@ function ProductContent() {
                             {/* Description */}
                             {product.description && (
                                 <div>
-                                    <h3 className="text-lg font-semibold text-gray-800 mb-2">Description</h3>
-                                    <p className="text-gray-600 leading-relaxed">{product.description}</p>
+                                    <h2 className="text-lg font-semibold text-gray-900 mb-2">Description</h2>
+                                    <p className="text-gray-700 leading-relaxed">{product.description}</p>
                                 </div>
                             )}
 
@@ -232,9 +294,9 @@ function ProductContent() {
                     {/* Reviews Section */}
                     {product.reviews && product.reviews.length > 0 && (
                         <div className="border-t border-gray-100 p-6 md:p-8">
-                            <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                            <h2 className="text-xl font-semibold text-gray-900 mb-4">
                                 Customer Reviews ({product.reviews.length})
-                            </h3>
+                            </h2>
                             <div className="grid md:grid-cols-2 gap-4">
                                 {product.reviews.map((review, index) => (
                                     <ReviewCard key={index} review={review} />
@@ -246,15 +308,15 @@ function ProductContent() {
                     {/* Recommendations Section */}
                     {product.recommendations && product.recommendations.length > 0 && (
                         <div className="border-t border-gray-100 p-6 md:p-8 bg-gray-50">
-                            <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                            <h2 className="text-xl font-semibold text-gray-900 mb-4">
                                 You Might Also Like
-                            </h3>
+                            </h2>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 {product.recommendations.map((rec, index) => (
                                     <div key={index} className="bg-white rounded-lg p-4 border border-gray-200">
                                         <p className="font-medium text-gray-800 text-sm line-clamp-2">{rec.title}</p>
                                         {rec.price > 0 && (
-                                            <p className="text-emerald-600 font-semibold mt-2">
+                                            <p className="text-emerald-800 font-semibold mt-2">
                                                 £{rec.price.toFixed(2)}
                                             </p>
                                         )}

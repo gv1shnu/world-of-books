@@ -5,7 +5,7 @@
  * Uses Redis caching and background scraping for stale data.
  */
 
-import { Controller, Get, Param, Query, Logger } from '@nestjs/common';
+import { Controller, Get, Param, Query, Logger, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import * as Bull from 'bull';
 import { PrismaService } from '../prisma/prisma.service';
@@ -201,7 +201,7 @@ export class CategoriesController {
       ]);
 
       if (!category) {
-        return { message: 'Category not found.' };
+        throw new NotFoundException('Category not found.');
       }
 
       // Build response with pagination info
@@ -297,18 +297,6 @@ export class CategoriesController {
       productsCount,
       ...progress,
     };
-  }
-
-  // ---------------------------------------------------------------------------
-  // GET /categories/admin/cache-stats
-  // ---------------------------------------------------------------------------
-  /**
-   * Returns Redis cache statistics for monitoring.
-   * Useful for debugging and dashboards.
-   */
-  @Get('admin/cache-stats')
-  async getCacheStats() {
-    return this.cache.getStats();
   }
 
   // ---------------------------------------------------------------------------

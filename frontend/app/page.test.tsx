@@ -3,13 +3,13 @@
  * Home Page Tests
  * =============================================================================
  * 
- * Tests for the main landing page component.
+ * Tests for the interactive part of the landing page.
  */
 
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import HomePage from './page';
+import HomePage from './HomeClient';
 
 // Mock next/link
 jest.mock('next/link', () => {
@@ -51,7 +51,7 @@ describe('HomePage', () => {
 
         render(<HomePage />, { wrapper: createWrapper() });
 
-        expect(screen.getByText('Loading the Library...')).toBeInTheDocument();
+        expect(screen.getByText('Loading the library...')).toBeInTheDocument();
     });
 
     it('should render navigation sections after loading', async () => {
@@ -136,12 +136,49 @@ describe('HomePage', () => {
         });
 
         // Search for something that doesn't exist
-        const searchInput = screen.getByPlaceholderText(/Find a category/i);
+        const searchInput = screen.getByLabelText('Find a category');
         fireEvent.change(searchInput, { target: { value: 'xyz123nonsense' } });
 
         await waitFor(() => {
             expect(screen.getByText(/No categories found matching/i)).toBeInTheDocument();
         });
+        expect(screen.queryByText(/Did you mean/i)).not.toBeInTheDocument();
+    });
+
+    it('should suggest the closest category for a typo', async () => {
+        const mockData = [
+            {
+                id: 1,
+                title: 'Fiction',
+                categories: [
+                    { id: 1, title: 'Science Fiction', slug: 'science-fiction' },
+                    { id: 2, title: 'Fantasy', slug: 'fantasy' },
+                ],
+            },
+        ];
+        (api.get as jest.Mock).mockResolvedValue({ data: mockData });
+
+        render(<HomePage />, { wrapper: createWrapper() });
+        await waitFor(() => expect(screen.getByText('Fantasy')).toBeInTheDocument());
+
+        fireEvent.change(screen.getByLabelText('Find a category'), { target: { value: 'fantsy' } });
+
+        const suggestion = await screen.findByRole('button', { name: 'Fantasy' });
+        expect(screen.getByText(/Did you mean/i)).toBeInTheDocument();
+        fireEvent.click(suggestion);
+        expect(screen.getByLabelText('Find a category')).toHaveValue('Fantasy');
+        expect(screen.getByRole('link', { name: /Fantasy/ })).toBeInTheDocument();
+    });
+
+    it('should render build-time categories without waiting for the API', () => {
+        (api.get as jest.Mock).mockReturnValue(new Promise(() => { }));
+        const initial = [
+            { id: 1, title: 'Fiction', slug: 'fiction', categories: [{ id: 1, title: 'Fantasy', slug: 'fantasy' }] },
+        ];
+
+        render(<HomePage initialNavigations={initial} />, { wrapper: createWrapper() });
+
+        expect(screen.getByRole('link', { name: /Fantasy/ })).toHaveAttribute('href', '/category?slug=fantasy');
     });
 
     it('should have clickable category links', async () => {
