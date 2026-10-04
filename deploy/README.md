@@ -1,65 +1,73 @@
 # Deploying to vishnugandarapu.in/world-of-books
 
-| Piece | Where | Cost |
+No credit card and no DNS changes needed.
+
+| Piece | Where | Free tier |
 | --- | --- | --- |
 | Frontend (Next.js static export) | GitHub Pages → `https://www.vishnugandarapu.in/world-of-books/` | Free |
-| Backend API + Postgres + Redis + Playwright | One VM running `deploy/docker-compose.prod.yml`, behind Caddy at `https://api.vishnugandarapu.in` | Free on Oracle Cloud Always Free |
+| Backend API (NestJS + Playwright, Docker) | Render web service → `https://world-of-books-api.onrender.com` | 512 MB, sleeps after 15 min idle |
+| Redis (cache + Bull queue) | Render Key Value | Free, data lost on restart (fine for cache/queue) |
+| Postgres | Neon | 0.5 GB, permanent, no card |
 
-GitHub Pages can only serve static files and cannot proxy requests, so the API
-lives on its own subdomain. Visitors only ever see the `/world-of-books` URL.
+GitHub Pages only serves static files, so the API runs on Render's own
+`onrender.com` address. Visitors only ever see the `/world-of-books` URL.
 
-## 1. Backend VM (Oracle Cloud Always Free)
+## 1. Postgres on Neon
 
-1. Create an Oracle Cloud account and launch a **VM.Standard.A1.Flex** instance
-   (Ampere/ARM, up to 4 OCPU / 24 GB is Always Free) with Ubuntu 24.04.
-   2 OCPU / 12 GB is plenty. If A1 capacity is unavailable in your region, retry
-   later or pick another availability domain.
-2. In the instance's VCN **Security List**, add ingress rules for TCP 80 and 443
-   from `0.0.0.0/0`. On the VM, open them in the OS firewall too:
-   ```bash
-   sudo iptables -I INPUT 6 -p tcp --dport 80 -j ACCEPT
-   sudo iptables -I INPUT 6 -p tcp --dport 443 -j ACCEPT
-   sudo netfilter-persistent save
-   ```
-3. Install Docker:
-   ```bash
-   curl -fsSL https://get.docker.com | sudo sh
-   sudo usermod -aG docker $USER && newgrp docker
-   ```
-4. At your DNS provider, add an **A record** `api` → the VM's public IP.
-5. Clone and start:
-   ```bash
-   git clone https://github.com/gv1shnu/world-of-books && cd world-of-books
-   cp deploy/.env.example deploy/.env && nano deploy/.env   # set POSTGRES_PASSWORD, SERPAPI_API_KEY
-   docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
-   ```
-   Caddy fetches the HTTPS certificate once DNS points at the VM.
-6. Check: `curl https://api.vishnugandarapu.in/categories/navigations`.
+1. Sign up at https://neon.com with GitHub. No card.
+2. Create a project (pick a region near Render's, e.g. AWS US East / Oregon,
+   or Frankfurt).
+3. **Connect** → turn **Connection pooling off** and copy the *direct*
+   connection string (host without `-pooler`). It looks like
+   `postgresql://user:pass@ep-xxx.us-east-2.aws.neon.tech/neondb?sslmode=require`.
+   The backend runs `prisma db push` at startup, which needs the direct URL.
 
-Update later with `git pull` and the same `docker compose ... up -d --build`.
-Logs: `docker compose -f deploy/docker-compose.prod.yml logs -f backend`.
+## 2. Backend on Render
 
-Any other Docker host works the same way (a spare PC, Hetzner, a GCP/AWS VM);
-it needs roughly 2 GB RAM for Chromium, Postgres and Redis together.
+1. Sign up at https://render.com with GitHub. No card.
+2. **New → Blueprint** → pick `gv1shnu/world-of-books`, branch `main`.
+   Render reads `render.yaml` and creates `world-of-books-api` and
+   `world-of-books-redis`.
+3. When prompted, paste `DATABASE_URL` (Neon direct string) and
+   `SERPAPI_API_KEY` (leave empty to disable automatic PDF search).
+4. Wait for the first Docker build (~5–10 min). Check:
+   `https://world-of-books-api.onrender.com/categories/navigations`.
+   If Render gave the service a different hostname, use that below.
 
-## 2. Frontend on GitHub Pages
+Free-tier behaviour to expect:
+- After 15 minutes without traffic the API sleeps; the next visit takes about a
+  minute while it wakes. The frontend shows its loading spinner meanwhile.
+- `render.yaml` caps scraping at one Chromium page at a time to stay within
+  512 MB. If the logs show out-of-memory restarts, lower
+  `CRAWLEE_MEMORY_MBYTES`.
+- Matched PDFs live in memory, so a "token expired" after the API sleeps just
+  means clicking **Extract PDF** again.
+- Workspace bandwidth is 5 GB/month; each PDF opened counts against it.
+
+## 3. Frontend on GitHub Pages
 
 1. In `gv1shnu/world-of-books` → **Settings → Pages**, set **Source** to
-   **GitHub Actions**. Do not set a custom domain here: project sites inherit
-   the domain of the `gv1shnu.github.io` user site.
+   **GitHub Actions**. Do not set a custom domain: project sites inherit it
+   from the `gv1shnu.github.io` user site.
 2. **Settings → Secrets and variables → Actions → Variables**: add
-   `NEXT_PUBLIC_API_URL` = `https://api.vishnugandarapu.in`.
-3. Push to `main` (or run the workflow manually). `.github/workflows/pages.yml`
-   tests, builds with `NEXT_PUBLIC_BASE_PATH=/world-of-books`, and publishes
-   `frontend/out`.
+   `NEXT_PUBLIC_API_URL` = `https://world-of-books-api.onrender.com`.
+3. Push to `main` (or run **Deploy frontend to GitHub Pages** manually).
 
 Book and category pages use query strings (`/product/?id=…`,
-`/category/?slug=…`) so every page exists as a static file and deep links
-survive a refresh.
+`/category/?slug=…`) so every page is a static file and deep links survive a
+refresh.
 
-## 3. Verify
+## 4. Verify
 
 - `https://www.vishnugandarapu.in/world-of-books/` loads with styles.
-- Categories and books load (if not, check the browser console for CORS:
-  `FRONTEND_ORIGINS` must be exactly `https://www.vishnugandarapu.in`).
+- Categories and books load. If not, open the browser console: a CORS error
+  means `FRONTEND_ORIGINS` on Render must be exactly
+  `https://www.vishnugandarapu.in`.
 - **Extract PDF** returns a match or "no match", not "not configured".
+
+## Alternative: any machine with Docker
+
+`deploy/docker-compose.prod.yml` runs the API, Postgres, Redis and Caddy on a
+single host with about 2 GB RAM. Copy `deploy/.env.example` to `deploy/.env`,
+then `docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build`.
+It needs a public hostname pointing at the machine for HTTPS.

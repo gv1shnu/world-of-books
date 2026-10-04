@@ -1,4 +1,4 @@
-# Production backend stack for a single VM (e.g. Oracle Cloud Always Free).
+# Alternative self-hosted backend stack (the primary deploy is render.yaml).
 # Run from the repo root:  docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
 services:
   caddy:
