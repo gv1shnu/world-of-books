@@ -13,7 +13,7 @@ import CategoryPage from './page';
 
 // Mock next/navigation
 jest.mock('next/navigation', () => ({
-    useParams: () => ({ slug: 'science-fiction' }),
+    useSearchParams: () => new URLSearchParams('slug=science-fiction'),
 }));
 
 // Mock the API module

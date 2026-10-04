@@ -9,7 +9,8 @@
  * Environment variables:
  *   - DATABASE_URL: PostgreSQL connection string
  *   - REDIS_URL: Redis connection string
- *   - VERCEL_URL: Frontend URL for CORS whitelist
+ *   - FRONTEND_ORIGINS: Comma-separated frontend origins for CORS
+ *   - VERCEL_URL: Legacy single frontend origin for CORS
  */
 
 import { NestFactory } from '@nestjs/core';
@@ -20,7 +21,7 @@ import { Logger } from '@nestjs/common';
 console.log('=== STARTUP DEBUG ===');
 console.log('DATABASE_URL:', process.env.DATABASE_URL ? 'SET' : 'NOT SET');
 console.log('REDIS_URL:', process.env.REDIS_URL ? 'SET' : 'NOT SET');
-console.log('VERCEL_URL:', process.env.VERCEL_URL ? 'SET' : 'NOT SET');
+console.log('FRONTEND_ORIGINS:', process.env.FRONTEND_ORIGINS ? 'SET' : 'NOT SET');
 console.log('=====================');
 
 async function bootstrap() {
@@ -32,10 +33,14 @@ async function bootstrap() {
 
     // CORS configuration
     // Allows requests from local development and deployed frontend
+    // FRONTEND_ORIGINS is a comma-separated list, e.g. https://www.vishnugandarapu.in
     const allowedOrigins = [
       'http://localhost:3000', // Local Next.js dev server
-      process.env.VERCEL_URL, // Production frontend URL
-    ].filter(Boolean);
+      process.env.VERCEL_URL, // Legacy single production frontend URL
+      ...(process.env.FRONTEND_ORIGINS || '').split(','),
+    ]
+      .map((origin) => origin?.trim())
+      .filter(Boolean);
 
     logger.log(`Allowed Origins: ${JSON.stringify(allowedOrigins)}`);
 
@@ -45,7 +50,7 @@ async function bootstrap() {
       credentials: true,
     });
 
-    // Listen on all interfaces (required for Docker/Railway)
+    // Listen on all interfaces (required for Docker)
     const port = 8080;
     await app.listen(port, '0.0.0.0');
 
