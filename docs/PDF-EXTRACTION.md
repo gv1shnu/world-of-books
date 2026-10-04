@@ -76,10 +76,9 @@ schema migration.
 For multiple API replicas, route extraction and reader requests to the same
 instance (sticky sessions), or replace the local cache with shared object
 storage and expiring tokens. A restart or cache eviction invalidates the token;
-the user can extract again. This branch retains existing API routing and uses
-the shared Axios client, so configure `NEXT_PUBLIC_API_URL` as for other APIs.
-The broader sub-path deployment and portfolio phases in the supplied planning
-prompt are separate work and have not been completed by this feature.
+the user can extract again. The reader uses the shared Axios client, so
+`NEXT_PUBLIC_API_URL` configures it like every other API call. The production
+stack in `deploy/` runs a single API replica. See `deploy/README.md`.
 
 ## Verification
 

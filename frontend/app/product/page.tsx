@@ -1,5 +1,5 @@
 /**
- * Product Detail Page - /product/[id]
+ * Product Detail Page - /product?id=<id>
  * 
  * Shows full product information including description, specs, reviews,
  * and recommended products. Triggers on-demand scraping if details are missing.
@@ -7,7 +7,8 @@
 
 'use client';
 
-import { useParams } from 'next/navigation';
+import { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import Link from 'next/link';
@@ -86,13 +87,22 @@ function SpecsTable({ specs }: { specs: Record<string, unknown> }) {
 // Main Component
 // -----------------------------------------------------------------------------
 
+// Query-string routing keeps the site exportable as static files (GitHub Pages).
 export default function ProductPage() {
-    const params = useParams();
-    const id = params.id as string;
+    return (
+        <Suspense fallback={null}>
+            <ProductContent />
+        </Suspense>
+    );
+}
+
+function ProductContent() {
+    const id = useSearchParams().get('id') ?? '';
 
     const { data: product, isLoading, error } = useQuery({
         queryKey: ['product', id],
         queryFn: () => getProduct(id),
+        enabled: !!id,
         staleTime: 1000 * 60 * 3, // 3 minutes
     });
 
@@ -134,7 +144,7 @@ export default function ProductPage() {
             <div className="bg-emerald-900 text-white py-6 px-4">
                 <div className="container mx-auto">
                     <Link
-                        href={product.category ? `/category/${product.category.slug}` : '/'}
+                        href={product.category ? `/category?slug=${encodeURIComponent(product.category.slug)}` : '/'}
                         className="text-emerald-300 hover:text-white transition inline-flex items-center gap-2 mb-4"
                     >
                         ← Back to {product.category?.title || 'Categories'}
