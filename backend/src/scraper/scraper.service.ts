@@ -26,6 +26,62 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PlaywrightCrawler } from 'crawlee';
 import { SCRAPER_CONFIG, SELECTORS, sleep, withRetry } from './scraper.config';
 
+/**
+ * Crawlee keeps one request queue per process and skips URLs it has already
+ * handled, so a retried scrape would silently do nothing. A unique key per
+ * run makes every scrape actually fetch the page.
+ */
+const uniqueRequest = (url: string) => ({
+  url,
+  uniqueKey: `${url}#${Date.now()}-${Math.random().toString(36).slice(2)}`,
+});
+
+/** Hosts the scraper lets the browser load; everything else is blocked. */
+const ALLOWED_HOST_PATTERN =
+  /(^|\.)(worldofbooks\.com|shopify\.com|shopifycdn\.com|algolia\.net|algolianet\.com|algolia\.io|jsdelivr\.net|unpkg\.com|cdnjs\.cloudflare\.com)$/;
+
+const decodeHtml = (value: string) =>
+  value
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&#x27;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+
+/** Extracts menu categories from World of Books homepage HTML. */
+export function parseNavigationHtml(html: string): ScrapedNavigation[] {
+  const grouped = new Map<string, ScrapedCategory[]>();
+  const seen = new Set<string>();
+
+  for (const [tag] of html.matchAll(/<a\b[^>]*data-menu_subcategory[^>]*>/g)) {
+    const attr = (name: string) => {
+      const match = tag.match(new RegExp(`\\b${name}="([^"]*)"`));
+      return match ? decodeHtml(match[1]).trim() : '';
+    };
+    const title = attr('data-menu_subcategory');
+    const parent = attr('data-menu_category');
+    const href = attr('href');
+    if (!title || !parent || !href.includes('/collections/')) continue;
+
+    const slug = href.split('?')[0].split('/').pop() || '';
+    if (!slug || seen.has(slug)) continue;
+    seen.add(slug);
+
+    if (!grouped.has(parent)) grouped.set(parent, []);
+    grouped.get(parent)!.push({
+      title,
+      slug,
+      url: href.startsWith('http') ? href : `https://www.worldofbooks.com${href}`,
+    });
+  }
+
+  return [...grouped].map(([title, categories]) => ({
+    title,
+    slug: title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+    categories,
+  }));
+}
+
 // -----------------------------------------------------------------------------
 // Data Types - What we extract from the website
 // -----------------------------------------------------------------------------
@@ -135,10 +191,51 @@ export class ScraperService {
     }
   }
 
+  /**
+   * Options shared by every browser crawler: don't wait for the full "load"
+   * event (third-party scripts can delay it past the timeout on a slow CPU)
+   * and launch Chromium with flags that keep its memory small.
+   */
+  private browserCrawlerOptions() {
+    return {
+      headless: SCRAPER_CONFIG.headless,
+      navigationTimeoutSecs: SCRAPER_CONFIG.navigationTimeoutSecs,
+      preNavigationHooks: [
+        async (_ctx: unknown, gotoOptions?: { waitUntil?: string }) => {
+          if (gotoOptions) gotoOptions.waitUntil = 'domcontentloaded';
+        },
+      ],
+      launchContext: {
+        launchOptions: {
+          args: [
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--disable-extensions',
+            '--no-zygote',
+            '--renderer-process-limit=1',
+            '--js-flags=--max-old-space-size=256',
+          ],
+        },
+      },
+    };
+  }
+
   private async enableTurboMode(page: any) {
     await page.route('**/*', (route) => {
-      const type = route.request().resourceType();
-      if (['image', 'media', 'font'].includes(type)) {
+      const request = route.request();
+      const type = request.resourceType();
+      if (['image', 'media', 'font', 'stylesheet'].includes(type)) {
+        return route.abort();
+      }
+      // Skip ads, analytics and other third-party scripts: they cost CPU and
+      // memory and can stall page load. Algolia serves the product listings.
+      let host = '';
+      try {
+        host = new URL(request.url()).hostname;
+      } catch {
+        return route.abort();
+      }
+      if (!ALLOWED_HOST_PATTERN.test(host)) {
         return route.abort();
       }
       return route.continue();
@@ -242,6 +339,8 @@ export class ScraperService {
   }
 
   // 1. NAVIGATION SCRAPER
+  // The menu is server-rendered, so a plain HTTP fetch is enough: no browser,
+  // which keeps memory low on small hosts.
   async scrapeNavigation(): Promise<ScrapedNavigation[]> {
     const NAV_URL = 'https://www.worldofbooks.com/en-gb';
 
@@ -249,74 +348,20 @@ export class ScraperService {
     const startTime = Date.now();
 
     return this.trackJob(ScrapeTargetType.NAVIGATION, NAV_URL, async () => {
-      const grouped = new Map<string, ScrapedCategory[]>();
-
-      const crawler = new PlaywrightCrawler({
-        headless: SCRAPER_CONFIG.headless,
-        requestHandlerTimeoutSecs: SCRAPER_CONFIG.navigationTimeoutSecs,
-        requestHandler: async ({ page }) => {
-          await this.enableTurboMode(page);
-          await page.setViewportSize(SCRAPER_CONFIG.viewport);
-          await page.setExtraHTTPHeaders({
-            'User-Agent': SCRAPER_CONFIG.userAgent,
-          });
-
-          try {
-            await page.waitForSelector('.menu-drawer__menu, nav', {
-              timeout: 8000,
-            });
-          } catch (e) {
-            this.logger.warn('Menu selector timeout - attempting scan anyway');
-          }
-
-          const navItems = await page.$$eval(
-            'a[data-menu_subcategory]',
-            (elements) => {
-              return elements.map((el) => ({
-                title: el.getAttribute('data-menu_subcategory'),
-                parent: el.getAttribute('data-menu_category'),
-                href: el.getAttribute('href'),
-              }));
-            },
-          );
-
-          const uniqueSlugs = new Set();
-          navItems.forEach((item) => {
-            if (
-              item.title &&
-              item.parent &&
-              item.href &&
-              item.href.includes('/collections/')
-            ) {
-              const rawSlug = item.href.split('/').pop() || '';
-              const fullSlug = rawSlug;
-
-              if (fullSlug && !uniqueSlugs.has(fullSlug)) {
-                uniqueSlugs.add(fullSlug);
-                if (!grouped.has(item.parent)) grouped.set(item.parent, []);
-
-                grouped.get(item.parent)?.push({
-                  title: item.title,
-                  slug: fullSlug,
-                  url: item.href.startsWith('http')
-                    ? item.href
-                    : `https://www.worldofbooks.com${item.href}`,
-                });
-              }
-            }
-          });
-        },
+      const html = await withRetry(async () => {
+        const response = await fetch(NAV_URL, {
+          headers: { 'User-Agent': SCRAPER_CONFIG.userAgent },
+          signal: AbortSignal.timeout(SCRAPER_CONFIG.navigationTimeoutSecs * 1000),
+        });
+        if (!response.ok) {
+          throw new Error(`Navigation fetch failed: HTTP ${response.status}`);
+        }
+        return response.text();
       });
 
-      await crawler.run([NAV_URL]);
-
-      const navigations: ScrapedNavigation[] = [];
-      for (const [parentTitle, categories] of grouped) {
-        navigations.push({
-          title: parentTitle,
-          slug: parentTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-          categories: categories,
-        });
+      const navigations = parseNavigationHtml(html);
+      if (navigations.length === 0) {
+        throw new Error('Navigation scrape found no menu links');
       }
 
       this.logger.log(
@@ -337,6 +382,7 @@ export class ScraperService {
       const products: ScrapedProduct[] = [];
 
       const crawler = new PlaywrightCrawler({
+        ...this.browserCrawlerOptions(),
         maxConcurrency: SCRAPER_CONFIG.maxConcurrency,
         maxRequestsPerCrawl: 3,
         requestHandlerTimeoutSecs: SCRAPER_CONFIG.requestTimeoutSecs,
@@ -452,7 +498,7 @@ export class ScraperService {
         },
       });
 
-      await crawler.run([targetUrl]);
+      await crawler.run([uniqueRequest(targetUrl)]);
       return products;
     });
   }
@@ -477,7 +523,7 @@ export class ScraperService {
     return this.trackJob(ScrapeTargetType.CATEGORY, baseUrl, async () => {
       // First, detect how many pages exist
       const crawler = new PlaywrightCrawler({
-        headless: SCRAPER_CONFIG.headless,
+        ...this.browserCrawlerOptions(),
         requestHandlerTimeoutSecs: SCRAPER_CONFIG.requestTimeoutSecs,
         requestHandler: async ({ page }) => {
           await this.enableTurboMode(page);
@@ -525,7 +571,7 @@ export class ScraperService {
         },
       });
 
-      await crawler.run([baseUrl]);
+      await crawler.run([uniqueRequest(baseUrl)]);
 
       // Apply max pages limit - use custom override if provided, else fallback to config
       const maxPages = customMaxPages ?? SCRAPER_CONFIG.maxPagesPerCategory;
@@ -546,7 +592,7 @@ export class ScraperService {
             const products: ScrapedProduct[] = [];
 
             const pageCrawler = new PlaywrightCrawler({
-              headless: SCRAPER_CONFIG.headless,
+              ...this.browserCrawlerOptions(),
               maxConcurrency: 1,
               requestHandlerTimeoutSecs: SCRAPER_CONFIG.requestTimeoutSecs,
               requestHandler: async ({ page: browserPage }) => {
@@ -740,7 +786,7 @@ export class ScraperService {
       };
 
       const crawler = new PlaywrightCrawler({
-        headless: SCRAPER_CONFIG.headless,
+        ...this.browserCrawlerOptions(),
         requestHandlerTimeoutSecs: SCRAPER_CONFIG.requestTimeoutSecs,
         requestHandler: async ({ page }) => {
           await this.enableTurboMode(page);
@@ -858,7 +904,7 @@ export class ScraperService {
         },
       });
 
-      await crawler.run([url]);
+      await crawler.run([uniqueRequest(url)]);
       return data;
     });
   }
