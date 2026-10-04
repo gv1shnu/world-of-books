@@ -241,12 +241,22 @@ export class CategoriesController {
         // Queue background scrape job
         const targetUrl = `https://www.worldofbooks.com/en-gb/collections/${slug}`;
         const maxPagesToScrape = query.maxPages ? Math.min(100, Math.max(1, parseInt(query.maxPages, 10))) : undefined;
-        await this.scrapeQueue.add('scrape-category', {
-          url: targetUrl,
-          categoryId: category.id,
-          slug: slug,
-          maxPages: maxPagesToScrape,
-        });
+        // One job per category: Bull ignores an add whose jobId is already
+        // waiting or running, so frequent polling can't pile up duplicates.
+        await this.scrapeQueue.add(
+          'scrape-category',
+          {
+            url: targetUrl,
+            categoryId: category.id,
+            slug: slug,
+            maxPages: maxPagesToScrape,
+          },
+          {
+            jobId: `scrape-category:${slug}`,
+            removeOnComplete: true,
+            removeOnFail: true,
+          },
+        );
 
         // Invalidate cache so next request gets fresh data
         await this.cache.delete(cacheKey);

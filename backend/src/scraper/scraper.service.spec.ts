@@ -35,11 +35,55 @@ const mockPrisma = {
   },
 };
 
+const collectionHtml = `<script>
+  var config = { "algoliaAppId": "APP1", "algoliaSearchApiKey": "KEY1", "algoliaIndexName": "products" };
+  collection_id = 12345;
+</script>`;
+
+const productHtml = `
+  <script type="application/ld+json">{"@type":"Book","name":"Dune","numberOfPages":"412","isbn":"9780340960196","author":{"@type":"Person","name":"Frank Herbert"},"image":"//img.example/dune.jpg","description":"Desert &amp; <b>spice</b>."}</script>
+  <table class="additional-info-table"><tbody>
+    <tr><td>ISBN 10</td><td><span>0340960191</span></td></tr>
+    <tr><td>Condition</td><td><span>Unavailable</span></td></tr>
+    <tr hidden><td>Note</td><td>secret</td></tr>
+  </tbody></table>`;
+
+const algoliaHit = (n: number) => ({
+  productHandle: `book-${n}`,
+  shortTitle: `Book ${n}`,
+  author: 'Author',
+  fromPrice: 3.5,
+  imageURL: `https://img.example/${n}.jpg`,
+  isbn13: `978000000000${n}`,
+});
+
+/** Routes fetch calls to canned WoB HTML and Algolia responses. */
+function mockWobFetch(nbPages = 2) {
+  return jest.spyOn(global, 'fetch').mockImplementation(async (input, init) => {
+    const url = String(input);
+    if (url.includes('algolia.net')) {
+      const params = new URLSearchParams(JSON.parse(String(init?.body)).params);
+      const page = Number(params.get('page'));
+      return new Response(
+        JSON.stringify({ hits: [algoliaHit(page)], page, nbPages, nbHits: nbPages }),
+        { status: 200 },
+      );
+    }
+    if (url.includes('/products/')) return new Response(productHtml, { status: 200 });
+    return new Response(collectionHtml, { status: 200 });
+  });
+}
+
 describe('ScraperService', () => {
   let service: ScraperService;
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockWobFetch();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -196,6 +240,39 @@ describe('ScraperService', () => {
       expect(result).toHaveProperty('totalItems');
       expect(result).toHaveProperty('errors');
     });
+
+    it('should page through Algolia with the collection filter and report batches', async () => {
+      const fetchSpy = mockWobFetch(2);
+      const batches: Array<{ current: number; total: number }> = [];
+
+      const result = await service.scrapeCategoryAllPages(
+        'https://www.worldofbooks.com/en-gb/collections/fiction-books',
+        async (_products, progress) => {
+          batches.push(progress);
+        },
+        5,
+      );
+
+      expect(result.pagesScraped).toBe(2);
+      expect(result.data.map((p) => p.title)).toEqual(['Book 0', 'Book 1']);
+      expect(result.data[0]).toEqual(
+        expect.objectContaining({
+          source_id: 'book-0',
+          price: 3.5,
+          source_url: 'https://www.worldofbooks.com/en-gb/products/book-0',
+        }),
+      );
+      expect(batches).toEqual([
+        { current: 1, total: 2 },
+        { current: 2, total: 2 },
+      ]);
+      const algoliaCall = fetchSpy.mock.calls.find(([url]) =>
+        String(url).includes('APP1-dsn.algolia.net/1/indexes/products/query'),
+      );
+      expect(JSON.parse(String(algoliaCall?.[1]?.body)).params).toContain(
+        'filters=collection_ids%3A12345',
+      );
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -224,6 +301,21 @@ describe('ScraperService', () => {
       expect(result).toHaveProperty('specs');
       expect(result).toHaveProperty('reviews');
     });
+
+    it('should read description, specs and image from the page HTML', async () => {
+      const result = await service.scrapeProductDetail(
+        'https://www.worldofbooks.com/en-gb/products/dune',
+      );
+
+      expect(result.description).toBe('Desert & spice.');
+      expect(result.image_url).toBe('https://img.example/dune.jpg');
+      expect(result.specs).toEqual({
+        'Number of pages': '412',
+        'ISBN 13': '9780340960196',
+        Author: 'Frank Herbert',
+        'ISBN 10': '0340960191',
+      });
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -231,9 +323,14 @@ describe('ScraperService', () => {
   // ---------------------------------------------------------------------------
   describe('searchProducts()', () => {
     it('should return array of products', async () => {
+      const fetchSpy = mockWobFetch(1);
       const result = await service.searchProducts('dune');
 
-      expect(Array.isArray(result)).toBe(true);
+      expect(result.map((p) => p.title)).toEqual(['Book 0']);
+      const algoliaCall = fetchSpy.mock.calls.find(([url]) =>
+        String(url).includes('algolia.net'),
+      );
+      expect(JSON.parse(String(algoliaCall?.[1]?.body)).params).toContain('query=dune');
     });
   });
 });

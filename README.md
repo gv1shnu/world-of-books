@@ -4,7 +4,7 @@ A full-stack book exploration platform that scrapes and displays live product da
 
 ## Features
 
-- **Live Scraping** - Playwright-powered headless browser extracts real-time pricing and availability  
+- **Live Scraping** - Fetches server-rendered pages and World of Books' Algolia listings for real-time pricing and availability (no headless browser)  
 - **Smart Caching** - Redis caching layer with TTL for fast responses
 - **Background Jobs** - Bull queue processes scrapes without blocking the UI
 - **Pagination** - Scrapes all pages of each category automatically
