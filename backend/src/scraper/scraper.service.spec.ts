@@ -8,7 +8,7 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { ScraperService } from './scraper.service';
+import { ScraperService, parseNavigationHtml } from './scraper.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 // Mock crawlee
@@ -94,6 +94,22 @@ describe('ScraperService', () => {
   // scrapeNavigation() tests
   // ---------------------------------------------------------------------------
   describe('scrapeNavigation()', () => {
+    const menuHtml = `
+      <a href="/en-gb/collections/fiction-books" data-menu_category="Fiction Books" data-menu_subcategory="Fiction">
+      <a data-menu_subcategory="Crime &amp; Mystery" href="/en-gb/collections/crime-and-mystery-books" data-menu_category="Fiction Books">
+      <a href="/en-gb/pages/autumn" data-menu_category="Trending Now" data-menu_subcategory="Autumn Reads">
+      <a href="/en-gb/collections/fiction-books?ref=menu" data-menu_category="Highlights" data-menu_subcategory="Fiction again">`;
+
+    beforeEach(() => {
+      jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValue(new Response(menuHtml, { status: 200 }));
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
     it('should track navigation scrape job', async () => {
       await service.scrapeNavigation();
 
@@ -107,10 +123,49 @@ describe('ScraperService', () => {
       );
     });
 
-    it('should return navigation array', async () => {
+    it('should return navigation parsed from the fetched HTML', async () => {
       const result = await service.scrapeNavigation();
 
-      expect(Array.isArray(result)).toBe(true);
+      expect(result).toEqual([
+        {
+          title: 'Fiction Books',
+          slug: 'fiction-books',
+          categories: [
+            {
+              title: 'Fiction',
+              slug: 'fiction-books',
+              url: 'https://www.worldofbooks.com/en-gb/collections/fiction-books',
+            },
+            {
+              title: 'Crime & Mystery',
+              slug: 'crime-and-mystery-books',
+              url: 'https://www.worldofbooks.com/en-gb/collections/crime-and-mystery-books',
+            },
+          ],
+        },
+      ]);
+    });
+
+    it('should fail the job when the menu has no category links', async () => {
+      jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValue(new Response('<html></html>', { status: 200 }));
+
+      await expect(service.scrapeNavigation()).rejects.toThrow(
+        'Navigation scrape found no menu links',
+      );
+    });
+  });
+
+  describe('parseNavigationHtml()', () => {
+    it('should ignore non-collection links and duplicate slugs', () => {
+      const navs = parseNavigationHtml(`
+        <a href="/en-gb/pages/x" data-menu_category="A" data-menu_subcategory="X">
+        <a href="/en-gb/collections/y" data-menu_category="A" data-menu_subcategory="Y">
+        <a href="/en-gb/collections/y" data-menu_category="B" data-menu_subcategory="Y2">`);
+
+      expect(navs).toHaveLength(1);
+      expect(navs[0].categories.map((c) => c.slug)).toEqual(['y']);
     });
   });
 
