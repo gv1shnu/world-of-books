@@ -138,7 +138,7 @@ world-of-books/
 Live at https://www.vishnugandarapu.in/world-of-books/
 
 - **Frontend:** static export published by GitHub Pages (`.github/workflows/pages.yml`)
-- **Backend:** Docker Compose stack (API, Postgres, Redis, Caddy) on a single VM at `https://api.vishnugandarapu.in`
+- **Backend:** Render free web service (Docker) + Render Key Value, with Postgres on Neon
 
 See [deploy/README.md](deploy/README.md) for the step-by-step guide.
 

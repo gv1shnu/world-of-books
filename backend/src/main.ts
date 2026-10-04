@@ -50,8 +50,8 @@ async function bootstrap() {
       credentials: true,
     });
 
-    // Listen on all interfaces (required for Docker)
-    const port = 8080;
+    // Listen on all interfaces (required for Docker). Render injects PORT.
+    const port = Number(process.env.PORT) || 8080;
     await app.listen(port, '0.0.0.0');
 
     logger.log(`Application started successfully`);

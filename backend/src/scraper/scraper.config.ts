@@ -50,7 +50,8 @@ export const SCRAPER_CONFIG = {
 
   // Concurrency - how many pages to scrape in parallel
   // Keep this low to avoid getting blocked
-  maxConcurrency: 2, // Reduced from 3 for politeness
+  // SCRAPER_MAX_CONCURRENCY=1 keeps Chromium inside a 512 MB free-tier instance
+  maxConcurrency: Number(process.env.SCRAPER_MAX_CONCURRENCY) || 2, // Reduced from 3 for politeness
   maxRequestsPerCrawl: 100,
 
   // Browser settings

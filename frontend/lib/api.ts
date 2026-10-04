@@ -8,7 +8,7 @@
  * configuration (base URL, headers, etc.)
  * 
  * Environment:
- *   NEXT_PUBLIC_API_URL - Backend API URL (https://api.vishnugandarapu.in in production)
+ *   NEXT_PUBLIC_API_URL - Backend API URL (https://world-of-books-api.onrender.com in production)
  */
 
 import axios from 'axios';
