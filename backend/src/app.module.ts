@@ -22,6 +22,7 @@ import { CategoriesController } from './categories/categories.controller';
 import { HealthModule } from './health/health.module';
 import { BullModule } from '@nestjs/bull';
 import { ProductsModule } from './products/products.module';
+import { PdfModule } from './pdf/pdf.module';
 import { AdminModule } from './admin/admin.module';
 
 @Module({
@@ -51,6 +52,7 @@ import { AdminModule } from './admin/admin.module';
 
     // Product details API
     ProductsModule,
+    PdfModule,
 
     // Admin dashboard API
     AdminModule,

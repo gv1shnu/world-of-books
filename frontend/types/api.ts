@@ -153,3 +153,15 @@ export interface AdminOverview {
     cache: CacheStats;
     recentJobs: ScrapeJob[];
 }
+
+/** Outcome of a title/author PDF search and actual page-count check. */
+export interface PdfExtraction {
+    status: 'matched' | 'no_match' | 'missing_metadata' | 'not_configured';
+    message: string;
+    query?: string;
+    expectedPages?: number;
+    tolerancePages?: number;
+    pdfPages?: number;
+    sourceUrl?: string;
+    token?: string;
+}

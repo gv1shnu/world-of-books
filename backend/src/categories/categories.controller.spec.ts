@@ -1,3 +1,6 @@
+// Keep Crawlee's browser/ESM dependencies out of controller and worker unit tests.
+jest.mock('crawlee', () => ({ PlaywrightCrawler: jest.fn() }));
+
 /**
  * =============================================================================
  * Categories Controller Unit Tests

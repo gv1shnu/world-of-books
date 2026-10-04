@@ -1,0 +1,40 @@
+# Render Blueprint: free backend API + free Key Value (Redis-compatible).
+# Postgres is external (Neon free tier) because Render's free Postgres is
+# deleted after 30 days. See deploy/README.md.
+services:
+  - type: web
+    name: world-of-books-api
+    runtime: docker
+    plan: free
+    region: singapore # same region as the Neon database (ap-southeast-1)
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false # Neon *direct* (non-pooler) connection string
+      - key: SERPAPI_API_KEY
+        sync: false
+      - key: FRONTEND_ORIGINS
+        value: https://www.vishnugandarapu.in
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: world-of-books-redis
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+      # Keep Chromium + Node inside 512 MB
+      - key: SCRAPER_MAX_CONCURRENCY
+        value: "1"
+      - key: CRAWLEE_MEMORY_MBYTES
+        value: "350"
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=192
+
+  - type: keyvalue
+    name: world-of-books-redis
+    plan: free
+    region: singapore
+    maxmemoryPolicy: volatile-lru # evict only TTL cache keys, never Bull job keys
+    ipAllowList: [] # only reachable from Render services in this account

@@ -161,7 +161,7 @@ describe('HomePage', () => {
 
         await waitFor(() => {
             const link = screen.getByRole('link', { name: /Science Fiction/i });
-            expect(link).toHaveAttribute('href', '/category/science-fiction');
+            expect(link).toHaveAttribute('href', '/category?slug=science-fiction');
         });
     });
 });

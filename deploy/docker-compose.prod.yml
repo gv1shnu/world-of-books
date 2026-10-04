@@ -1,0 +1,60 @@
+# Alternative self-hosted backend stack (the primary deploy is render.yaml).
+# Run from the repo root:  docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      API_DOMAIN: ${API_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+
+  backend:
+    build: ../backend
+    restart: unless-stopped
+    shm_size: 1gb # Chromium needs more than Docker's 64 MB default
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/worldofbooks?schema=public
+      REDIS_URL: redis://redis:6379
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS}
+      SERPAPI_API_KEY: ${SERPAPI_API_KEY}
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: worldofbooks
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 100mb --maxmemory-policy volatile-lru # evict only TTL cache keys, never Bull job keys
+    volumes:
+      - redis_data:/data
+
+volumes:
+  caddy_data:
+  caddy_config:
+  postgres_data:
+  redis_data:

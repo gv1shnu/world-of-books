@@ -157,7 +157,7 @@ export default function HomePage() {
               {nav.categories.map((cat) => (
                 <Link
                   key={cat.id}
-                  href={`/category/${cat.slug}`}
+                  href={`/category?slug=${encodeURIComponent(cat.slug)}`}
                   className="group relative bg-gray-50 hover:bg-white p-4 rounded-xl border border-transparent hover:border-emerald-200 hover:shadow-lg transition-all duration-300 flex items-center justify-between overflow-hidden"
                 >
                   <span className="font-medium text-gray-600 group-hover:text-emerald-800 transition-colors z-10 relative">
