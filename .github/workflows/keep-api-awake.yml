@@ -18,7 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
+      # Before a retry curl truncates the output file, which fails on /dev/null
+      # (exit 23) whenever Render answers a cold start with an error page.
       - run: >-
-          curl -sS -o /dev/null -w "API answered %{http_code}\n"
+          curl --no-progress-meter -o "$RUNNER_TEMP/body" -w "API answered %{http_code}\n"
           --retry 2 --retry-delay 20 --retry-all-errors --max-time 90
           "${{ vars.NEXT_PUBLIC_API_URL }}/categories/navigations"
